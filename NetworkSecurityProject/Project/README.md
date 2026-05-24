@@ -1,136 +1,39 @@
 # 🛡️ Lab Cybersécurité Docker — Mini-Projet 4ème SSI
 
-Adaptation Docker du mini-projet « Sécurité des Réseaux et Infrastructures » (60 jours), conçue pour fonctionner sur une machine à ressources limitées (laptop ~8 Go RAM).
+> **Adaptation Docker** du mini-projet « Sécurité des Réseaux et Infrastructures » (60 jours), conçue pour fonctionner sur une machine à ressources limitées (laptop ~8 Go RAM).
 
----
+## 🎯 Objectif de cette adaptation
 
-# 🎯 Objectif de cette adaptation
-
-Reproduire le socle pédagogique principal du lab pfSense + 2× FortiGate + Kali, mais en utilisant uniquement Docker et des conteneurs Linux légers.
-
-Le périmètre validé couvre :
-
-- la segmentation réseau
-- le routage
-- le NAT
-- le DNS/NTP
-- le VPN IPsec
-- le DHCP
-- le proxy Squid
-- HAProxy
-- Suricata en IDS
-- le monitoring
-- le hardening avancé de Phase 2
-- la haute disponibilité keepalived / conntrackd
-- la remédiation SSH Phase 3
-- la Phase 4 complète en mode SOC / SIEM léger
-
----
-
-# 📦 Équivalences de l’architecture
+Reproduire le **socle pédagogique principal** du lab pfSense + 2× FortiGate + Kali, mais en utilisant uniquement **Docker** et des conteneurs Linux légers. Le périmètre validé couvre la segmentation réseau, le routage, le NAT, le DNS/NTP, le VPN IPsec, le DHCP, le proxy Squid, HAProxy, Suricata en IDS, le monitoring, le hardening avance de Phase 2, la haute disponibilité keepalived / conntrackd, la remédiation SSH Phase 3 et la Phase 4 complète en mode SOC / SIEM léger.
 
 | Composant original | Remplacement Docker | Fonction |
 |---|---|---|
-| pfSense | `fw-isp` + `fw-isp-2` (Debian + iptables + dnsmasq + chrony + HAProxy + keepalived) | Firewall ISP HA, DNS, NTP, publication HTTP |
-| FortiGate FW_CLIENT | `fw-client` + `fw-client-2` (Debian + iptables + strongSwan + dnsmasq + squid + keepalived + conntrackd) | FW client HA, VPN IPsec, DHCP, filtrage web |
-| FortiGate FW_SERVER | `fw-server` + `fw-server-2` (Debian + iptables + strongSwan + chrony + keepalived + conntrackd) | FW serveur HA, VPN IPsec, NTP |
-| VPN IPsec IKEv2 | strongSwan (AES-256, SHA-256, modp2048) | Équivalent pédagogique |
-| Kali Linux | Image officielle `kalilinux/kali-rolling` | Identique |
-| Uptime Kuma | Image officielle `louislam/uptime-kuma` | Identique |
-| VLANs (Phase 2) | Réseaux Docker bridge séparés | `lan_client`, `vlan_voip`, `vlan_guest`, `lan_server`, `dmz`, `mgmt` déployés |
+| **pfSense** | `fw-isp` + `fw-isp-2` (Debian + iptables + dnsmasq + chrony + HAProxy + keepalived) | Firewall ISP HA, DNS, NTP, publication HTTP |
+| **FortiGate FW_CLIENT** | `fw-client` + `fw-client-2` (Debian + iptables + strongSwan + dnsmasq + squid + keepalived + conntrackd) | FW client HA, VPN IPsec, DHCP, filtrage web |
+| **FortiGate FW_SERVER** | `fw-server` + `fw-server-2` (Debian + iptables + strongSwan + chrony + keepalived + conntrackd) | FW serveur HA, VPN IPsec, NTP |
+| **VPN IPsec IKEv2** | strongSwan (AES-256, SHA-256, modp2048) | Équivalent pédagogique |
+| **Kali Linux** | Image officielle `kalilinux/kali-rolling` | Identique |
+| **Uptime Kuma** | Image officielle `louislam/uptime-kuma` | Identique |
+| **VLANs (Phase 2)** | Réseaux Docker `bridge` séparés | `lan_client`, `vlan_voip`, `vlan_guest`, `lan_server`, `dmz`, `mgmt` déployés |
 
----
+## ✅ Statut validé aujourd'hui
 
-# ✅ Statut validé aujourd'hui
+- Fonctionnel et vérifié : `fw-isp`, `fw-client`, `fw-server`, `client1`, `client2`, `voip1`, `guest1`, `kali`, `webserver`, `sshserver`, `dmz-web`, `internet-probe`, `uptime-kuma`, `log-collector`, `loki`, `promtail`, `grafana`
+- Vérifié : routage entre zones, NAT Internet, DNS/NTP, IPsec, HTTP via VPN, SSH vers `sshserver`, HTTP DMZ, publication web via HAProxy, proxy Squid, monitoring et tests automatisés
+- Les scripts actifs résolvent les interfaces dynamiquement a partir des IPs statiques du compose ; l'ordre `ethX` n'est plus une hypothèse de fonctionnement
+- La segmentation Phase 2 coeur est integree : VLAN VOIP, VLAN GUEST, DMZ et matrice de flux testee
+- Le hardening avance Phase 2 est livre : objets et groupes `ipset` sur `fw-client`, liste `blocked_domains.txt` versionnee pour Squid, garde-fous egress sur `fw-isp`
+- La brique IDS Phase 2 est livree : `Suricata` tourne sur `fw-client`, journalise dans `fw-client/logs/suricata/` et valide des alertes de laboratoire versionnees
+- La brique HA Phase 2 est livree : `keepalived` maintient les VIPs historiques et `conntrackd` replique les etats des deux paires FortiGate-like
+- La remédiation Phase 3 par défaut est livree : `sshserver` n'accepte plus ni root login ni password auth, `fail2ban` est actif et SSH est retiré des serveurs web
+- La brique Phase 4 livree combine `log-collector`, `Loki`, `Promtail` et `Grafana` pour centraliser les journaux, exposer un backend SIEM léger, charger des règles de détection et provisionner des dashboards SOC / HA
+- Le jeu de validation couvre maintenant `test-connectivity.sh`, `test-vlan-matrix.sh`, `test-policy-hardening.sh`, `test-suricata.sh`, `test-ha.sh`, `test-phase3-hardening.sh`, `test-log-centralization.sh`, `test-siem-phase4.sh` et `test-full-lab.sh`
+- Les documents `PHASE2.md`, `PHASE3.md`, `PHASE4.md` et `SOUTENANCE.md` servent de support pour l'exploitation, la restitution et la démo finale
+- Evolutions possibles : `Wazuh`, l'inspection TLS dediee, les notifications externes et une retention longue duree au-dessus du pipeline SIEM livre
 
-## Fonctionnel et vérifié
+## 🗺️ Architecture déployée
 
-- `fw-isp`
-- `fw-client`
-- `fw-server`
-- `client1`
-- `client2`
-- `voip1`
-- `guest1`
-- `kali`
-- `webserver`
-- `sshserver`
-- `dmz-web`
-- `internet-probe`
-- `uptime-kuma`
-- `log-collector`
-- `loki`
-- `promtail`
-- `grafana`
-
-## Vérifications réalisées
-
-- routage entre zones
-- NAT Internet
-- DNS/NTP
-- IPsec
-- HTTP via VPN
-- SSH vers `sshserver`
-- HTTP DMZ
-- publication web via HAProxy
-- proxy Squid
-- monitoring
-- tests automatisés
-
-## Fonctionnalités validées
-
-- Les scripts actifs résolvent les interfaces dynamiquement à partir des IPs statiques du compose ; l’ordre `ethX` n’est plus une hypothèse de fonctionnement.
-- La segmentation Phase 2 cœur est intégrée : VLAN VOIP, VLAN GUEST, DMZ et matrice de flux testée.
-- Le hardening avancé Phase 2 est livré :
-  - objets et groupes `ipset` sur `fw-client`
-  - liste `blocked_domains.txt` versionnée pour Squid
-  - garde-fous egress sur `fw-isp`
-- La brique IDS Phase 2 est livrée :
-  - Suricata tourne sur `fw-client`
-  - journalisation dans `fw-client/logs/suricata/`
-  - validation des alertes de laboratoire versionnées
-- La brique HA Phase 2 est livrée :
-  - `keepalived` maintient les VIPs historiques
-  - `conntrackd` réplique les états des deux paires FortiGate-like
-- La remédiation Phase 3 par défaut est livrée :
-  - `sshserver` n’accepte plus ni root login ni password auth
-  - `fail2ban` actif
-  - SSH retiré des serveurs web
-- La brique Phase 4 livrée combine :
-  - `log-collector`
-  - Loki
-  - Promtail
-  - Grafana
-  afin de centraliser les journaux, exposer un backend SIEM léger, charger des règles de détection et provisionner des dashboards SOC / HA.
-- Le jeu de validation couvre désormais :
-  - `test-connectivity.sh`
-  - `test-vlan-matrix.sh`
-  - `test-policy-hardening.sh`
-  - `test-suricata.sh`
-  - `test-ha.sh`
-  - `test-phase3-hardening.sh`
-  - `test-log-centralization.sh`
-  - `test-siem-phase4.sh`
-  - `test-full-lab.sh`
-- Les documents :
-  - `PHASE2.md`
-  - `PHASE3.md`
-  - `PHASE4.md`
-  - `SOUTENANCE.md`
-  servent de support pour l’exploitation, la restitution et la démonstration finale.
-
-## Évolutions possibles
-
-- Wazuh
-- inspection TLS dédiée
-- notifications externes
-- rétention longue durée au-dessus du pipeline SIEM livré
-
----
-
-# 🗺️ Architecture déployée
-
-```text
+```
                          ┌──────────────────────┐
                          │   Internet simulé    │
                          │   (200.0.0.0/24)     │
@@ -162,3 +65,147 @@ Le périmètre validé couvre :
          │ client2   .11   │                │ sshserver  .11      │
          │ kali      .50   │                │                     │
          └─────────────────┘                └─────────────────────┘
+```
+
+Le deploiement reel ajoute les noeuds de secours `fw-isp-2`, `fw-client-2` et `fw-server-2`. Les adresses historiques visibles dans le schema restent les VIPs de service, preservees pendant les bascules.
+
+## 🚀 Démarrage rapide
+
+### Pré-requis
+- **Docker Engine ≥ 24.0**
+- **Docker Compose v2** (`docker compose` et non `docker-compose`)
+- **Linux** recommandé (Windows/Mac OK avec WSL2 / Docker Desktop)
+- **4 Go RAM minimum**, 8 Go conseillé
+- ~10 Go d'espace disque
+
+### Vérification
+```bash
+docker --version           # Docker version 24+ 
+docker compose version     # Compose v2.x
+```
+
+### Construction et lancement
+```bash
+cd hania/
+
+# 1) Construire toutes les images (~10-15 min la 1ère fois)
+docker compose build
+
+# 2) Démarrer le lab
+docker compose up -d
+
+# 3) Vérifier que tout est UP
+docker compose ps
+
+# 4) Lancer les tests de validation
+chmod +x scripts/test-connectivity.sh
+chmod +x scripts/test-vlan-matrix.sh
+chmod +x scripts/test-policy-hardening.sh
+chmod +x scripts/test-suricata.sh
+chmod +x scripts/test-ha.sh
+chmod +x scripts/test-phase3-hardening.sh
+chmod +x scripts/test-log-centralization.sh
+chmod +x scripts/test-siem-phase4.sh
+chmod +x scripts/test-full-lab.sh
+
+# Smoke test
+bash ./scripts/test-connectivity.sh
+
+# Validation Phase 2
+bash ./scripts/test-vlan-matrix.sh
+
+# Validation du hardening avance
+bash ./scripts/test-policy-hardening.sh
+
+# Validation IDS / Suricata
+bash ./scripts/test-suricata.sh
+
+# Validation HA
+bash ./scripts/test-ha.sh
+
+# Validation hardening Phase 3
+bash ./scripts/test-phase3-hardening.sh
+
+# Validation centralisation Phase 4
+bash ./scripts/test-log-centralization.sh
+
+# Validation SOC / SIEM Phase 4
+bash ./scripts/test-siem-phase4.sh
+
+# Validation complete
+bash ./scripts/test-full-lab.sh
+```
+
+### Accès aux conteneurs
+```bash
+# Shell sur les firewalls
+docker exec -it fw-isp    bash
+docker exec -it fw-client bash
+docker exec -it fw-server bash
+
+# Shell sur les postes
+docker exec -it client1   bash
+docker exec -it guest1    bash
+docker exec -it voip1     bash
+docker exec -it webserver bash
+docker exec -it dmz-web   bash
+docker exec -it internet-probe bash
+docker exec -it kali      bash    # Pour la phase 3
+
+# Logs en direct
+docker compose logs -f fw-client
+```
+
+### Interface Uptime Kuma
+- Ouvrir : http://localhost:3001
+- Créer un compte au premier accès
+
+### Interface Grafana SOC / SIEM
+- Ouvrir : http://localhost:3002
+- Identifiants par défaut du lab : `admin` / `labcyber-admin`
+- Dashboards livrés : `LabCyber SOC Overview`, `LabCyber HA & VPN`
+
+## 📚 Documentation des Phases
+
+| Document | Description |
+|---|---|
+| [`docs/PHASE1.md`](docs/PHASE1.md) | Jours 1-15 — Consolidation, audit et validation du socle actuel |
+| [`docs/PHASE2.md`](docs/PHASE2.md) | Jours 16-30 — Extensions VLAN, ACLs avancées, filtrage web, HA |
+| [`docs/PHASE3.md`](docs/PHASE3.md) | Jours 31-45 — Campagne de pentest et remédiation |
+| [`docs/PHASE4.md`](docs/PHASE4.md) | Suite — Centralisation des logs, SIEM léger, règles d'alerte et dashboards |
+| [`docs/SOUTENANCE.md`](docs/SOUTENANCE.md) | Trame de démonstration finale, preuves à montrer et checklist jury |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Dépannage des problèmes courants |
+| [`docs/EQUIVALENCES.md`](docs/EQUIVALENCES.md) | Tableau de correspondance pfSense/FortiGate ↔ Docker |
+
+## 🔐 Notes de sécurité importantes
+
+1. **Le dépôt livré est désormais durci par défaut** pour la brique SSH. Les scénarios offensifs Phase 3 restent documentés, mais les replays "avant correctif" doivent être effectués de manière contrôlée. **Ne jamais exposer ces conteneurs sur Internet**.
+2. Les conteneurs firewall tournent en `privileged: true` à cause des contraintes IPsec/iptables. C'est acceptable en lab mais **inacceptable en production**.
+3. Le PSK IPsec présent dans le code doit être changé avant tout usage non-pédagogique.
+4. Le mot de passe Grafana versionné (`admin` / `labcyber-admin`) est un secret de lab. Il doit être remplacé si le projet est réutilisé hors contexte pédagogique.
+
+## 🧹 Arrêt et nettoyage
+
+```bash
+# Arrêter le lab (préserve les données)
+docker compose down
+
+# Tout effacer (volumes inclus)
+docker compose down -v
+
+# Supprimer aussi les images
+docker compose down -v --rmi all
+```
+
+## ⚠️ Limitations connues vs. lab original
+
+| Point | Original | Docker | Impact |
+|---|---|---|---|
+| **HA pfSense (CARP)** | Possible | `keepalived` unicast + VIPs sur `fw-isp` / `fw-isp-2` | Equivalent pedagogique valide, sans GUI ni synchro d'etat pfSense |
+| **HA FortiGate** | Cluster complet | `keepalived` + `conntrackd` sur `fw-client*` et `fw-server*` | Bascule et sync L3/L4 valides, mais pas de FGCP complet |
+| **Inspection SSL/TLS profonde** | FortiGate native | Extension optionnelle | Squid SslBump demanderait une integration dediee |
+| **Inspection paquet niveau ASIC** | FortiGate | Logiciel uniquement | Un IDS type Suricata peut enrichir le socle |
+| **SIEM / corrélation** | Plateforme dédiée | `log-collector` + `Loki` + `Promtail` + `Grafana` | SIEM léger livré, `Wazuh` reste la grande brique naturelle pour aller plus loin |
+| **Interface graphique** | GUI native | CLI + Uptime Kuma | Pédagogique différent mais formateur |
+
+---
