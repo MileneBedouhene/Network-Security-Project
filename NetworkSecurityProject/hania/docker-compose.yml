@@ -1,0 +1,715 @@
+###############################################################################
+# Docker Cyber Lab - Mini-Projet Sécurité Réseau 4ème SSI
+# Architecture : FW_ISP (pfSense-like) + FW_CLIENT + FW_SERVER + VPN IPsec
+# Auteur : Adapté pour environnement à ressources limitées (Docker)
+###############################################################################
+
+services:
+
+  # =========================================================================
+  # FW_ISP : Remplace pfSense - Firewall central, DNS, NTP, HAProxy
+  # =========================================================================
+  fw-isp:
+    build:
+      context: .
+      dockerfile: fw-isp/Dockerfile
+    container_name: fw-isp
+    hostname: fw-isp
+    privileged: true               # Nécessaire pour iptables + manipulation réseau
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: MASTER
+      HA_PRIORITY: "200"
+      HA_AUTH_PASS: ispvr42
+      NODE_INTERNET_IP: 200.0.0.11
+      NODE_WAN_CLIENT_IP: 10.10.0.11
+      NODE_WAN_SERVER_IP: 10.20.0.11
+      NODE_MGMT_IP: 192.168.99.11
+      VIP_INTERNET_IP: 200.0.0.10
+      VIP_WAN_CLIENT_IP: 10.10.0.1
+      VIP_WAN_SERVER_IP: 10.20.0.1
+      VIP_MGMT_IP: 192.168.99.1
+      PEER_INTERNET_NODE_IP: 200.0.0.12
+      PEER_WAN_CLIENT_NODE_IP: 10.10.0.12
+      PEER_WAN_SERVER_NODE_IP: 10.20.0.12
+      PEER_MGMT_NODE_IP: 192.168.99.12
+      CLIENT_WAN_VIP: 10.10.0.2
+      SERVER_WAN_VIP: 10.20.0.2
+      CLIENT_MGMT_VIP: 192.168.99.10
+      SERVER_MGMT_VIP: 192.168.99.20
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      internet_net:
+        ipv4_address: 200.0.0.11   # Noeud primaire, VIP publique = 200.0.0.10
+      wan_client_net:
+        ipv4_address: 10.10.0.11   # Noeud primaire, VIP = 10.10.0.1
+      wan_server_net:
+        ipv4_address: 10.20.0.11   # Noeud primaire, VIP = 10.20.0.1
+      mgmt_net:
+        ipv4_address: 192.168.99.11 # Noeud primaire, VIP = 192.168.99.1
+    volumes:
+      - ./fw-isp/logs:/var/log/fw
+    restart: unless-stopped
+
+  fw-isp-2:
+    build:
+      context: .
+      dockerfile: fw-isp/Dockerfile
+    container_name: fw-isp-2
+    hostname: fw-isp-2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: BACKUP
+      HA_PRIORITY: "150"
+      HA_AUTH_PASS: ispvr42
+      NODE_INTERNET_IP: 200.0.0.12
+      NODE_WAN_CLIENT_IP: 10.10.0.12
+      NODE_WAN_SERVER_IP: 10.20.0.12
+      NODE_MGMT_IP: 192.168.99.12
+      VIP_INTERNET_IP: 200.0.0.10
+      VIP_WAN_CLIENT_IP: 10.10.0.1
+      VIP_WAN_SERVER_IP: 10.20.0.1
+      VIP_MGMT_IP: 192.168.99.1
+      PEER_INTERNET_NODE_IP: 200.0.0.11
+      PEER_WAN_CLIENT_NODE_IP: 10.10.0.11
+      PEER_WAN_SERVER_NODE_IP: 10.20.0.11
+      PEER_MGMT_NODE_IP: 192.168.99.11
+      CLIENT_WAN_VIP: 10.10.0.2
+      SERVER_WAN_VIP: 10.20.0.2
+      CLIENT_MGMT_VIP: 192.168.99.10
+      SERVER_MGMT_VIP: 192.168.99.20
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      internet_net:
+        ipv4_address: 200.0.0.12
+      wan_client_net:
+        ipv4_address: 10.10.0.12
+      wan_server_net:
+        ipv4_address: 10.20.0.12
+      mgmt_net:
+        ipv4_address: 192.168.99.12
+    volumes:
+      - ./fw-isp-2/logs:/var/log/fw
+    restart: unless-stopped
+
+  # =========================================================================
+  # FW_CLIENT : Remplace FortiGate côté client - VPN, DHCP, filtrage web
+  # =========================================================================
+  fw-client:
+    build:
+      context: .
+      dockerfile: fw-client/Dockerfile
+    container_name: fw-client
+    hostname: fw-client
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: MASTER
+      HA_PRIORITY: "200"
+      HA_AUTH_PASS: clivr42
+      NODE_WAN_IP: 10.10.0.21
+      NODE_LAN_IP: 192.168.10.21
+      NODE_VOIP_IP: 192.168.30.21
+      NODE_GUEST_IP: 192.168.40.21
+      NODE_MGMT_IP: 192.168.99.21
+      VIP_WAN_IP: 10.10.0.2
+      VIP_LAN_IP: 192.168.10.1
+      VIP_VOIP_IP: 192.168.30.1
+      VIP_GUEST_IP: 192.168.40.1
+      VIP_MGMT_IP: 192.168.99.10
+      PEER_WAN_NODE_IP: 10.10.0.22
+      PEER_LAN_NODE_IP: 192.168.10.22
+      PEER_VOIP_NODE_IP: 192.168.30.22
+      PEER_GUEST_NODE_IP: 192.168.40.22
+      PEER_MGMT_NODE_IP: 192.168.99.22
+      UPSTREAM_WAN_GW: 10.10.0.1
+      UPSTREAM_MGMT_DNS: 192.168.99.1
+      PEER_VPN_WAN_IP: 10.20.0.2
+      CONNTRACKD_LOCAL_IP: 192.168.99.21
+      CONNTRACKD_PEER_IP: 192.168.99.22
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      wan_client_net:
+        ipv4_address: 10.10.0.21   # Noeud primaire, VIP WAN = 10.10.0.2
+      lan_client_net:
+        ipv4_address: 192.168.10.21 # Noeud primaire, VIP LAN = 192.168.10.1
+      vlan_voip_net:
+        ipv4_address: 192.168.30.21 # Noeud primaire, VIP VOIP = 192.168.30.1
+      vlan_guest_net:
+        ipv4_address: 192.168.40.21 # Noeud primaire, VIP GUEST = 192.168.40.1
+      mgmt_net:
+        ipv4_address: 192.168.99.21
+    depends_on:
+      - fw-isp
+      - fw-isp-2
+    volumes:
+      - ./fw-client/logs:/var/log/fw
+    restart: unless-stopped
+
+  fw-client-2:
+    build:
+      context: .
+      dockerfile: fw-client/Dockerfile
+    container_name: fw-client-2
+    hostname: fw-client-2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: BACKUP
+      HA_PRIORITY: "150"
+      HA_AUTH_PASS: clivr42
+      NODE_WAN_IP: 10.10.0.22
+      NODE_LAN_IP: 192.168.10.22
+      NODE_VOIP_IP: 192.168.30.22
+      NODE_GUEST_IP: 192.168.40.22
+      NODE_MGMT_IP: 192.168.99.22
+      VIP_WAN_IP: 10.10.0.2
+      VIP_LAN_IP: 192.168.10.1
+      VIP_VOIP_IP: 192.168.30.1
+      VIP_GUEST_IP: 192.168.40.1
+      VIP_MGMT_IP: 192.168.99.10
+      PEER_WAN_NODE_IP: 10.10.0.21
+      PEER_LAN_NODE_IP: 192.168.10.21
+      PEER_VOIP_NODE_IP: 192.168.30.21
+      PEER_GUEST_NODE_IP: 192.168.40.21
+      PEER_MGMT_NODE_IP: 192.168.99.21
+      UPSTREAM_WAN_GW: 10.10.0.1
+      UPSTREAM_MGMT_DNS: 192.168.99.1
+      PEER_VPN_WAN_IP: 10.20.0.2
+      CONNTRACKD_LOCAL_IP: 192.168.99.22
+      CONNTRACKD_PEER_IP: 192.168.99.21
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      wan_client_net:
+        ipv4_address: 10.10.0.22
+      lan_client_net:
+        ipv4_address: 192.168.10.22
+      vlan_voip_net:
+        ipv4_address: 192.168.30.22
+      vlan_guest_net:
+        ipv4_address: 192.168.40.22
+      mgmt_net:
+        ipv4_address: 192.168.99.22
+    depends_on:
+      - fw-isp
+      - fw-isp-2
+    volumes:
+      - ./fw-client-2/logs:/var/log/fw
+    restart: unless-stopped
+
+  # =========================================================================
+  # FW_SERVER : Remplace FortiGate côté serveur - VPN, NTP, sécurité avancée
+  # =========================================================================
+  fw-server:
+    build:
+      context: .
+      dockerfile: fw-server/Dockerfile
+    container_name: fw-server
+    hostname: fw-server
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: MASTER
+      HA_PRIORITY: "200"
+      HA_AUTH_PASS: srvvr42
+      NODE_WAN_IP: 10.20.0.21
+      NODE_LAN_IP: 192.168.20.21
+      NODE_DMZ_IP: 192.168.50.21
+      NODE_MGMT_IP: 192.168.99.31
+      VIP_WAN_IP: 10.20.0.2
+      VIP_LAN_IP: 192.168.20.1
+      VIP_DMZ_IP: 192.168.50.1
+      VIP_MGMT_IP: 192.168.99.20
+      PEER_WAN_NODE_IP: 10.20.0.22
+      PEER_LAN_NODE_IP: 192.168.20.22
+      PEER_DMZ_NODE_IP: 192.168.50.22
+      PEER_MGMT_NODE_IP: 192.168.99.32
+      UPSTREAM_WAN_GW: 10.20.0.1
+      UPSTREAM_MGMT_DNS: 192.168.99.1
+      PEER_VPN_WAN_IP: 10.10.0.2
+      CONNTRACKD_LOCAL_IP: 192.168.99.31
+      CONNTRACKD_PEER_IP: 192.168.99.32
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      wan_server_net:
+        ipv4_address: 10.20.0.21   # Noeud primaire, VIP WAN = 10.20.0.2
+      lan_server_net:
+        ipv4_address: 192.168.20.21 # Noeud primaire, VIP LAN = 192.168.20.1
+      dmz_net:
+        ipv4_address: 192.168.50.21 # Noeud primaire, VIP DMZ = 192.168.50.1
+      mgmt_net:
+        ipv4_address: 192.168.99.31
+    depends_on:
+      - fw-isp
+      - fw-isp-2
+    volumes:
+      - ./fw-server/logs:/var/log/fw
+    restart: unless-stopped
+
+  fw-server-2:
+    build:
+      context: .
+      dockerfile: fw-server/Dockerfile
+    container_name: fw-server-2
+    hostname: fw-server-2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.ip_nonlocal_bind=1
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.conf.all.arp_ignore=1
+      - net.ipv4.conf.all.arp_announce=2
+    environment:
+      HA_ENABLED: "1"
+      HA_STATE: BACKUP
+      HA_PRIORITY: "150"
+      HA_AUTH_PASS: srvvr42
+      NODE_WAN_IP: 10.20.0.22
+      NODE_LAN_IP: 192.168.20.22
+      NODE_DMZ_IP: 192.168.50.22
+      NODE_MGMT_IP: 192.168.99.32
+      VIP_WAN_IP: 10.20.0.2
+      VIP_LAN_IP: 192.168.20.1
+      VIP_DMZ_IP: 192.168.50.1
+      VIP_MGMT_IP: 192.168.99.20
+      PEER_WAN_NODE_IP: 10.20.0.21
+      PEER_LAN_NODE_IP: 192.168.20.21
+      PEER_DMZ_NODE_IP: 192.168.50.21
+      PEER_MGMT_NODE_IP: 192.168.99.31
+      UPSTREAM_WAN_GW: 10.20.0.1
+      UPSTREAM_MGMT_DNS: 192.168.99.1
+      PEER_VPN_WAN_IP: 10.10.0.2
+      CONNTRACKD_LOCAL_IP: 192.168.99.32
+      CONNTRACKD_PEER_IP: 192.168.99.31
+      REMOTE_SYSLOG_HOST: 192.168.99.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      wan_server_net:
+        ipv4_address: 10.20.0.22
+      lan_server_net:
+        ipv4_address: 192.168.20.22
+      dmz_net:
+        ipv4_address: 192.168.50.22
+      mgmt_net:
+        ipv4_address: 192.168.99.32
+    depends_on:
+      - fw-isp
+      - fw-isp-2
+    volumes:
+      - ./fw-server-2/logs:/var/log/fw
+    restart: unless-stopped
+
+  # =========================================================================
+  # CLIENT 1 : Poste de travail dans le LAN_CLIENT
+  # =========================================================================
+  client1:
+    build: ./client
+    container_name: client1
+    hostname: client1
+    cap_add:
+      - NET_ADMIN
+    networks:
+      lan_client_net:
+        ipv4_address: 192.168.10.10
+    depends_on:
+      - fw-client
+    restart: unless-stopped
+
+  # =========================================================================
+  # CLIENT 2 : Deuxième poste pour tester l'isolation inter-VLANs
+  # =========================================================================
+  client2:
+    build: ./client
+    container_name: client2
+    hostname: client2
+    cap_add:
+      - NET_ADMIN
+    networks:
+      lan_client_net:
+        ipv4_address: 192.168.10.11
+    depends_on:
+      - fw-client
+    restart: unless-stopped
+
+  # =========================================================================
+  # VOIP 1 : Hote du VLAN_VOIP pour valider l'isolation et les flux autorises
+  # =========================================================================
+  voip1:
+    build: ./client
+    container_name: voip1
+    hostname: voip1
+    cap_add:
+      - NET_ADMIN
+    environment:
+      GATEWAY_IP: 192.168.30.1
+      DNS_SERVER: 10.10.0.1
+      SEARCH_DOMAIN: labcyber.local
+    networks:
+      vlan_voip_net:
+        ipv4_address: 192.168.30.10
+    depends_on:
+      - fw-client
+    restart: unless-stopped
+
+  # =========================================================================
+  # GUEST 1 : Hote du VLAN_GUEST pour valider l'isolation Internet-only
+  # =========================================================================
+  guest1:
+    build: ./client
+    container_name: guest1
+    hostname: guest1
+    cap_add:
+      - NET_ADMIN
+    environment:
+      GATEWAY_IP: 192.168.40.1
+      DNS_SERVER: 10.10.0.1
+      SEARCH_DOMAIN: labcyber.local
+    networks:
+      vlan_guest_net:
+        ipv4_address: 192.168.40.10
+    depends_on:
+      - fw-client
+    restart: unless-stopped
+
+  # =========================================================================
+  # SERVER WEB : Serveur HTTP/HTTPS dans le LAN_SERVER
+  # =========================================================================
+  webserver:
+    build: ./server
+    container_name: webserver
+    hostname: webserver
+    cap_add:
+      - NET_ADMIN
+    environment:
+      SERVER_ROLE: webserver
+      ENABLE_SSH: "0"
+    networks:
+      lan_server_net:
+        ipv4_address: 192.168.20.10
+    depends_on:
+      - fw-server
+    restart: unless-stopped
+
+  # =========================================================================
+  # SERVER SSH : Serveur SSH cible pour les tests
+  # =========================================================================
+  sshserver:
+    build: ./server
+    container_name: sshserver
+    hostname: sshserver
+    cap_add:
+      - NET_ADMIN
+    environment:
+      SERVER_ROLE: sshserver
+      ENABLE_SSH: "1"
+      ENABLE_FAIL2BAN: "1"
+      SSH_PERMIT_ROOT_LOGIN: "no"
+      SSH_PASSWORD_AUTH: "no"
+      SSH_ALLOW_USERS: admin
+      REMOTE_SYSLOG_HOST: 192.168.20.60
+      REMOTE_SYSLOG_PORT: "514"
+      REMOTE_SYSLOG_PROTOCOL: tcp
+    networks:
+      lan_server_net:
+        ipv4_address: 192.168.20.11
+    depends_on:
+      - fw-server
+    restart: unless-stopped
+
+  # =========================================================================
+  # DMZ WEB : Serveur HTTP expose dans la DMZ pour valider Phase 2
+  # =========================================================================
+  dmz-web:
+    build: ./server
+    container_name: dmz-web
+    hostname: dmz-web
+    cap_add:
+      - NET_ADMIN
+    environment:
+      SERVER_ROLE: dmz-web
+      ENABLE_SSH: "0"
+      GATEWAY_IP: 192.168.50.1
+      DNS_SERVER: 10.20.0.1
+      SEARCH_DOMAIN: labcyber.local
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.50.10
+    depends_on:
+      - fw-server
+    restart: unless-stopped
+
+  # =========================================================================
+  # KALI : Machine d'attaque pour la phase 3 (pentest)
+  # Connectée au LAN_CLIENT pour simuler un attaquant interne
+  # =========================================================================
+  kali:
+    build: ./attacker
+    container_name: kali
+    hostname: kali
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW                    # Indispensable pour nmap, hping, etc.
+    networks:
+      lan_client_net:
+        ipv4_address: 192.168.10.50
+    depends_on:
+      - fw-client
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # =========================================================================
+  # INTERNET PROBE : Simule une machine externe sur Internet simulé
+  # =========================================================================
+  internet-probe:
+    build: ./client
+    container_name: internet-probe
+    hostname: internet-probe
+    cap_add:
+      - NET_ADMIN
+    environment:
+      GATEWAY_IP: 200.0.0.10
+      DNS_SERVER: ""
+      SEARCH_DOMAIN: ""
+    networks:
+      internet_net:
+        ipv4_address: 200.0.0.50
+    depends_on:
+      - fw-isp
+    restart: unless-stopped
+
+  # =========================================================================
+  # UPTIME KUMA : Monitoring (image officielle)
+  # =========================================================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    hostname: uptime-kuma
+    networks:
+      mgmt_net:
+        ipv4_address: 192.168.99.50
+    ports:
+      - "3001:3001"                # Accessible depuis l'hôte sur localhost:3001
+    volumes:
+      - uptime-kuma-data:/app/data
+    restart: unless-stopped
+
+  log-collector:
+    build:
+      context: .
+      dockerfile: monitoring/log-collector/Dockerfile
+    container_name: log-collector
+    hostname: log-collector
+    networks:
+      mgmt_net:
+        ipv4_address: 192.168.99.60
+      lan_server_net:
+        ipv4_address: 192.168.20.60
+    volumes:
+      - ./monitoring/log-collector/logs:/var/log/remote
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: loki
+    hostname: loki
+    command: -config.file=/etc/loki/config.yml
+    networks:
+      mgmt_net:
+        ipv4_address: 192.168.99.70
+    ports:
+      - "3110:3100"
+    volumes:
+      - ./monitoring/siem/loki/config.yml:/etc/loki/config.yml:ro
+      - ./monitoring/siem/loki/rules:/etc/loki/rules:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: promtail
+    hostname: promtail
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+      - log-collector
+    networks:
+      mgmt_net:
+        ipv4_address: 192.168.99.71
+    volumes:
+      - ./monitoring/siem/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./monitoring/log-collector/logs:/var/log/remote:ro
+      - ./fw-client/logs/suricata:/var/log/lab/fw-client/suricata:ro
+      - ./fw-client-2/logs/suricata:/var/log/lab/fw-client-2/suricata:ro
+      - promtail-positions:/tmp
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.6
+    container_name: grafana
+    hostname: grafana
+    depends_on:
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: labcyber-admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3002
+    networks:
+      mgmt_net:
+        ipv4_address: 192.168.99.72
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./monitoring/siem/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/siem/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+###############################################################################
+# RÉSEAUX DOCKER (équivalent des sous-réseaux du lab)
+###############################################################################
+networks:
+  # Internet "simulé" - réseau auquel FW_ISP est connecté côté WAN
+  internet_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 200.0.0.0/24
+          gateway: 200.0.0.1
+
+  # Lien WAN entre FW_ISP et FW_CLIENT
+  wan_client_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.0.0/24
+          gateway: 10.10.0.254
+
+  # Lien WAN entre FW_ISP et FW_SERVER
+  wan_server_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+          gateway: 10.20.0.254
+
+  # LAN derrière FW_CLIENT
+  lan_client_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.10.0/24
+          gateway: 192.168.10.254
+
+  # LAN derrière FW_SERVER
+  lan_server_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.20.0/24
+          gateway: 192.168.20.254
+
+  # VLAN VOIP derrière FW_CLIENT
+  vlan_voip_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.30.0/24
+          gateway: 192.168.30.254
+
+  # VLAN GUEST derrière FW_CLIENT
+  vlan_guest_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.40.0/24
+          gateway: 192.168.40.254
+
+  # DMZ derrière FW_SERVER
+  dmz_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.50.0/24
+          gateway: 192.168.50.254
+
+  # Réseau de management (Out-Of-Band) - phase 2
+  mgmt_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.99.0/24
+          gateway: 192.168.99.254
+
+volumes:
+  uptime-kuma-data:
+  loki-data:
+  promtail-positions:
+  grafana-data:
